@@ -54,3 +54,62 @@ make install
 1. 使用Frida或其他工具分析应用中的广告类和方法
 2. 在`Tweak.xm`中添加针对性的hook代码
 3. 重新编译和安装Tweak 
+
+---
+
+# AdBlocker - iOS Ad Blocking Tweak
+
+This is an iOS ad blocking tweak written using Logos syntax, capable of intercepting common ad SDKs and ad displays.
+
+## Features
+
+- Intercept common ad view controllers
+- Hide and remove ad views
+- Block ad loading and display methods
+- Support for common ad SDKs (Google AdMob, ByteDance, Tencent Ad, etc.)
+- For rewarded ads, simulate completion callbacks to receive rewards
+
+## Requirements
+
+- Jailbroken iOS device
+- Theos development environment
+
+## Compilation and Installation
+
+1. Make sure Theos development environment is installed
+2. Clone this repository
+3. Enter the project directory
+4. Execute the following commands to compile and install:
+
+```bash
+make
+make package
+make install
+```
+
+## Customization
+
+If you need to block other ad SDKs or ad methods, you can add corresponding hook code in the `Tweak.xm` file.
+
+## Notes
+
+- This tweak is for learning and research purposes only
+- Please respect developers and support official apps
+- Different apps may use different ad SDKs or custom ad implementations, which may require specific adjustments
+
+## How It Works
+
+This tweak blocks ads through the following methods:
+
+1. Identifying and removing ad view controllers
+2. Hiding and removing ad views
+3. Intercepting common ad loading and display methods
+4. Custom handling for specific ad SDKs
+
+## How to Customize
+
+To customize ad blocking for specific applications, you can:
+
+1. Use Frida or other tools to analyze ad classes and methods in the app
+2. Add targeted hook code in `Tweak.xm`
+3. Recompile and install the tweak 
