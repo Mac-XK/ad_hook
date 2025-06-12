@@ -297,4 +297,253 @@ Frida发现的类和方法:
 3. 确定需要hook的关键方法
 4. 测试不同hook策略的效果
 
-通过这些信息，您可以编写更加精确和有效的Logos hook代码，实现更好的广告拦截效果。 
+通过这些信息，您可以编写更加精确和有效的Logos hook代码，实现更好的广告拦截效果。
+
+---
+
+# Guide to Analyzing iOS App Ads Using Frida
+
+This guide explains how to use the Frida tool to analyze ad classes and methods in iOS applications, in order to better write customized ad blocking hooks.
+
+## Preparation
+
+1. Install Frida:
+   ```bash
+   pip install frida-tools
+   ```
+
+2. Install Frida server on jailbroken device:
+   - Download the appropriate frida-server from the [Frida releases page](https://github.com/frida/frida/releases)
+   - Upload it to your device and grant execution permissions
+   - Run frida-server
+
+## Basic Analysis Steps
+
+### 1. List Applications on Device
+
+```bash
+frida-ps -U
+```
+
+### 2. Attach to Target Application
+
+```bash
+frida -U [Application Bundle ID or Process Name]
+```
+
+### 3. Use JavaScript for Analysis
+
+Here are some useful Frida script examples:
+
+#### Find Classes Containing "Ad" or "Advertisement"
+
+```javascript
+// save as find_ad_classes.js
+setTimeout(function() {
+    console.log("[*] Starting to search for ad-related classes...");
+    var classes = ObjC.classes;
+    var adClasses = [];
+    
+    for (var className in classes) {
+        if (className.toLowerCase().indexOf("ad") !== -1 || 
+            className.indexOf("Banner") !== -1 ||
+            className.indexOf("Interstitial") !== -1 ||
+            className.indexOf("Rewarded") !== -1) {
+            adClasses.push(className);
+        }
+    }
+    
+    console.log("[*] Found " + adClasses.length + " potential ad-related classes:");
+    adClasses.sort().forEach(function(className) {
+        console.log(className);
+    });
+}, 1000);
+```
+
+Run the script:
+```bash
+frida -U -l find_ad_classes.js [Application Bundle ID]
+```
+
+#### Trace Ad Class Method Calls
+
+```javascript
+// save as trace_ad_methods.js
+if (ObjC.available) {
+    try {
+        var className = "AdManager"; // Replace with the ad class name you want to track
+        var methods = ObjC.classes[className].$ownMethods;
+        
+        console.log("[*] Starting to trace methods of " + className + ":");
+        
+        methods.forEach(function(method) {
+            var implementation = ObjC.classes[className][method];
+            Interceptor.attach(implementation.implementation, {
+                onEnter: function(args) {
+                    console.log("[+] Call: " + className + " -> " + method);
+                    
+                    // Print parameters (if object type)
+                    if (method.indexOf(":") !== -1) {
+                        var params = method.split(":");
+                        for (var i = 1; i < params.length; i++) {
+                            if (args[i+1]) {
+                                var obj = ObjC.Object(args[i+1]);
+                                console.log("    Parameter " + (i) + ": " + obj);
+                            }
+                        }
+                    }
+                },
+                onLeave: function(retval) {
+                    if (retval) {
+                        var obj = ObjC.Object(retval);
+                        console.log("    Return value: " + obj);
+                    }
+                    console.log("");
+                }
+            });
+        });
+    } catch (e) {
+        console.log("[!] Exception: " + e.message);
+    }
+} else {
+    console.log("Objective-C Runtime not available");
+}
+```
+
+Run the script:
+```bash
+frida -U -l trace_ad_methods.js [Application Bundle ID]
+```
+
+#### Monitor Ad SDK Initialization
+
+```javascript
+// save as monitor_ad_sdk.js
+if (ObjC.available) {
+    // Monitor common ad SDK initialization methods
+    
+    // Google AdMob
+    try {
+        var GADMobileAds = ObjC.classes.GADMobileAds;
+        Interceptor.attach(GADMobileAds["+ sharedInstance"].implementation, {
+            onEnter: function(args) {
+                console.log("[+] GADMobileAds.sharedInstance called");
+            }
+        });
+        
+        Interceptor.attach(GADMobileAds["- startWithCompletionHandler:"].implementation, {
+            onEnter: function(args) {
+                console.log("[+] GADMobileAds.startWithCompletionHandler: called");
+            }
+        });
+    } catch (e) {
+        console.log("[!] Google AdMob SDK not found or method doesn't exist");
+    }
+    
+    // ByteDance
+    try {
+        var BUAdSDKManager = ObjC.classes.BUAdSDKManager;
+        Interceptor.attach(BUAdSDKManager["+ setupWithAppId:"].implementation, {
+            onEnter: function(args) {
+                var appId = ObjC.Object(args[2]);
+                console.log("[+] BUAdSDKManager.setupWithAppId: called, AppID: " + appId);
+            }
+        });
+    } catch (e) {
+        console.log("[!] ByteDance SDK not found or method doesn't exist");
+    }
+    
+    // Tencent Ad
+    try {
+        var GDTSDKConfig = ObjC.classes.GDTSDKConfig;
+        Interceptor.attach(GDTSDKConfig["+ setupWithAppId:"].implementation, {
+            onEnter: function(args) {
+                var appId = ObjC.Object(args[2]);
+                console.log("[+] GDTSDKConfig.setupWithAppId: called, AppID: " + appId);
+            }
+        });
+    } catch (e) {
+        console.log("[!] Tencent Ad SDK not found or method doesn't exist");
+    }
+    
+    console.log("[*] Ad SDK monitoring set up");
+} else {
+    console.log("Objective-C Runtime not available");
+}
+```
+
+Run the script:
+```bash
+frida -U -l monitor_ad_sdk.js [Application Bundle ID]
+```
+
+## Advanced Analysis Techniques
+
+### Dynamically Modify Ad SDK Behavior
+
+```javascript
+// save as modify_ad_behavior.js
+if (ObjC.available) {
+    // Example: Modify ad availability check method
+    try {
+        var AdManager = ObjC.classes.AdManager;
+        Interceptor.replace(AdManager["- isAdAvailable"].implementation, new NativeCallback(function() {
+            console.log("[+] Intercepting isAdAvailable call, returning false");
+            return 0; // Return NO/false
+        }, 'bool', ['pointer', 'pointer']));
+        
+        console.log("[*] Replaced AdManager.isAdAvailable method");
+    } catch (e) {
+        console.log("[!] Failed to replace method: " + e.message);
+    }
+} else {
+    console.log("Objective-C Runtime not available");
+}
+```
+
+### Find Ad-Related View Controllers
+
+```javascript
+// save as find_ad_viewcontrollers.js
+if (ObjC.available) {
+    // Monitor view controller presentation
+    var UIViewController = ObjC.classes.UIViewController;
+    
+    Interceptor.attach(UIViewController["- presentViewController:animated:completion:"].implementation, {
+        onEnter: function(args) {
+            var viewController = ObjC.Object(args[2]);
+            var className = viewController.$className;
+            
+            // Check if it might be an ad view controller
+            if (className.toLowerCase().indexOf("ad") !== -1 || 
+                className.indexOf("Banner") !== -1 ||
+                className.indexOf("Interstitial") !== -1 ||
+                className.indexOf("Rewarded") !== -1 ||
+                className.indexOf("Splash") !== -1) {
+                
+                console.log("[+] Detected potential ad view controller:");
+                console.log("    Class name: " + className);
+                console.log("    Description: " + viewController.toString());
+                
+                // Print view hierarchy
+                setTimeout(function() {
+                    try {
+                        var view = viewController.view();
+                        console.log("    View hierarchy: " + view.recursiveDescription().toString());
+                    } catch (e) {
+                        console.log("    Unable to get view hierarchy: " + e.message);
+                    }
+                }, 1000); // Delay 1 second to ensure view is loaded
+            }
+        }
+    });
+    
+    console.log("[*] View controller monitoring set up");
+} else {
+    console.log("Objective-C Runtime not available");
+}
+```
+
+## From Frida Analysis to Logos Hook
+
+Once you have identified the classes and methods to hook using Frida, you can write corresponding Logos code in Tweak.xm. 
